@@ -1,0 +1,6 @@
+{
+  "name": "The Little Universe",
+  "description": "A celestial and spiritual daily sanctuary offering daily energy readings, weekly forecasts, mystical tarot card selections, and personalized cosmic messages.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
