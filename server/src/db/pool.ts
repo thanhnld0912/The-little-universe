@@ -4,6 +4,21 @@ import { env } from '../config/env.js';
 const { Pool } = pg;
 
 /**
+ * Return `date` columns as the plain 'YYYY-MM-DD' string Postgres stores.
+ *
+ * By default `pg` converts OID 1082 (date) into a JavaScript `Date` at LOCAL
+ * midnight. For a value that has no time and no zone, that is actively wrong:
+ * `2026-08-21` becomes `2026-08-20T17:00:00Z` for a developer at UTC+7, and
+ * calling `.toISOString().slice(0, 10)` on it then yields the PREVIOUS day.
+ * Since the daily and weekly caches are keyed by date, that off-by-one would
+ * make the cache miss once per day, silently regenerating a prediction that
+ * already existed.
+ *
+ * Registered once, at module scope, before any pool is created.
+ */
+pg.types.setTypeParser(pg.types.builtins.DATE, (value: string) => value);
+
+/**
  * ONE pool per process, created lazily and cached on `globalThis`.
  *
  * Why `globalThis` and not a plain module-level `let`:

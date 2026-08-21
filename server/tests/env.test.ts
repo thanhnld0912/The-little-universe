@@ -43,10 +43,21 @@ async function loadEnv(vars: Record<string, string>): Promise<LoadResult> {
   // A minimal inherited environment: enough for Node to run on Windows and
   // POSIX, but nothing that could leak the developer's own configuration in
   // and make a test pass for the wrong reason.
+  //
+  // DOTENV_CONFIG_PATH is not optional here. The child runs with cwd set to
+  // the server root so that `tsx` resolves, which means `dotenv/config` would
+  // otherwise read the developer's real `server/.env` and quietly supply the
+  // exact variables several of these tests assert are MISSING. Pointing dotenv
+  // at a file that does not exist (it ignores a missing file) makes `vars` the
+  // only source of configuration.
+  //
+  // This is not hypothetical: every test below passed until a real `.env` was
+  // created, at which point "missing required variables" started failing.
   const childEnv: NodeJS.ProcessEnv = {
     PATH: process.env['PATH'],
     SystemRoot: process.env['SystemRoot'],
     TEMP: process.env['TEMP'],
+    DOTENV_CONFIG_PATH: path.join(SERVER_ROOT, 'tests', '.env.absent'),
     ...vars,
   };
 
@@ -75,10 +86,24 @@ test('a complete configuration loads', async () => {
 
 test('missing required variables are reported by name, all at once', async () => {
   const result = await loadEnv({});
-  assert.equal(result.ok, false);
+  assert.equal(
+    result.ok,
+    false,
+    'configuration loaded from nothing — the child process is reading a real .env file, ' +
+      'so these tests are not isolated',
+  );
   for (const key of ['DATABASE_URL', 'JWT_SECRET', 'CORS_ORIGIN', 'AI_PROVIDER']) {
     assert.match(result.message, new RegExp(key), `expected ${key} in the failure message`);
   }
+});
+
+test('the test harness itself is isolated from any real .env file', async () => {
+  // A guard on the guard. If dotenv ever finds a real file again, this fails
+  // with an explicit explanation rather than as a confusing assertion in an
+  // unrelated test.
+  const result = await loadEnv({});
+  assert.equal(result.ok, false, 'a child process with no variables set must not be configurable');
+  assert.match(result.message, /DATABASE_URL/);
 });
 
 test('the failure message never contains a secret value', async () => {

@@ -5,6 +5,16 @@ import { blankToUndefined, splitList } from '../utils/envHelpers.js';
 /** Wraps a schema so that an empty-string env value is treated as "not set". */
 const optional = <T extends z.ZodTypeAny>(schema: T) => z.preprocess(blankToUndefined, schema);
 
+/** True when the host's timezone database recognises the identifier. */
+function isKnownTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const envSchema = z
   .object({
     // --- required -----------------------------------------------------------
@@ -19,6 +29,21 @@ const envSchema = z
     // --- optional -----------------------------------------------------------
     PORT: optional(z.coerce.number().int().positive().max(65535).default(4000)),
     JWT_EXPIRES_IN: optional(z.string().min(1).default('7d')),
+
+    /**
+     * The IANA zone that defines when the application's day rolls over.
+     *
+     * Validated against the host's own timezone database rather than a
+     * hard-coded list, so a typo like "Asia/Ho_Chi_Min" fails at boot instead
+     * of silently falling back to UTC and shifting every reading by 7 hours.
+     */
+    APP_TIMEZONE: optional(
+      z
+        .string()
+        .min(1)
+        .default('Asia/Ho_Chi_Minh')
+        .refine(isKnownTimeZone, 'APP_TIMEZONE must be a valid IANA timezone identifier'),
+    ),
 
     OPENAI_API_KEY: optional(z.string().min(1).optional()),
     OPENAI_MODEL: optional(z.string().min(1).default('gpt-4o-mini')),
