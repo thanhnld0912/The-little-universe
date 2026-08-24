@@ -14,7 +14,8 @@
     "start": "node dist/src/server.js",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:migrate:status": "tsx scripts/migrate.ts --status",
-    "test": "node --import tsx --test \"tests/**/*.test.ts\""
+    "test": "node --import tsx --test --test-concurrency=1 \"tests/**/*.test.ts\"",
+    "test:file": "node --import tsx --test"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",

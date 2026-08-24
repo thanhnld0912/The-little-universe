@@ -202,6 +202,8 @@ export class MockAIProvider implements AIProvider {
         return this.daily(seed);
       case 'weekly':
         return this.weekly(seed);
+      case 'tarot':
+        return this.tarot(seed);
       default:
         throw new Error(
           `MockAIProvider has no output for task ${JSON.stringify(request.task)}`,
@@ -253,7 +255,57 @@ export class MockAIProvider implements AIProvider {
       days,
     };
   }
+
+  /**
+   * A tarot reading.
+   *
+   * Note that the mock does NOT name a card. The card, its orientation and its
+   * meaning are settled by the service before the prompt is built; the reading
+   * is written around them. A mock that invented a card name would be
+   * imitating a provider we would not accept.
+   */
+  private tarot(seed: string): unknown {
+    return {
+      title: pick(TAROT_TITLES, seed, 'title'),
+      summary: pick(TAROT_SUMMARIES, seed, 'summary'),
+      interpretation:
+        'The card you drew may be describing something already in motion rather than something ahead of you. ' +
+        'One possible reading is that the situation has been asking for attention rather than for a decision. ' +
+        'You might find that what looked like hesitation was actually a kind of care.',
+      guidance: pick(TAROT_GUIDANCE, seed, 'guidance'),
+      reflectionQuestion: pick(TAROT_QUESTIONS, seed, 'question'),
+    };
+  }
 }
+
+const TAROT_TITLES = [
+  'A Quiet Turning',
+  'What the Card Holds',
+  'Something Beginning to Settle',
+  'A Small Light Offered',
+  'The Shape of This Moment',
+] as const;
+
+const TAROT_SUMMARIES = [
+  'This card may be pointing at something you have already half-noticed.',
+  'There may be less to decide here than it feels like from the inside.',
+  'One possible reading is that a slow change has been underway for a while.',
+  'This may be an invitation to look at the situation from a softer angle.',
+] as const;
+
+const TAROT_GUIDANCE = [
+  'You might sit with this for a day before acting on it. Nothing here needs to be resolved tonight.',
+  'This could be a good moment to say one true sentence out loud, even if only to yourself.',
+  'You may find it useful to notice what you were hoping this card would say.',
+  'Consider letting this be a question rather than an answer for now.',
+] as const;
+
+const TAROT_QUESTIONS = [
+  'What would change if you trusted your own read on this?',
+  'What are you protecting, and does it still need protecting?',
+  'Where in this are you waiting for permission?',
+  'What would the gentlest next step look like?',
+] as const;
 
 /** Exposed so a test can assert the mock covers every declared day type. */
 export const MOCK_WEEK_SHAPE = WEEK_SHAPE;

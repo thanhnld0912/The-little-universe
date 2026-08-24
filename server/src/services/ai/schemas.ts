@@ -120,3 +120,27 @@ export const weeklyPredictionDraftSchema = z
   });
 
 export type WeeklyPredictionDraft = z.infer<typeof weeklyPredictionDraftSchema>;
+
+/**
+ * A tarot reading.
+ *
+ * Deliberately small. Every field is rendered, and nothing is here because it
+ * sounded useful. Note what the model is NOT asked for: the card, its suit,
+ * its orientation, or its traditional meaning. All of those are loaded from
+ * the database and handed to it as fact, so the model cannot invent a card or
+ * silently re-orient one.
+ */
+export const tarotReadingDraftSchema = z.strictObject({
+  /** A short evocative title for this reading. */
+  title: shortText(90),
+  /** One or two sentences capturing the reading at a glance. */
+  summary: shortText(320),
+  /** The main body: what this card may be pointing toward. */
+  interpretation: shortText(900),
+  /** A gentle, concrete invitation. Never an instruction or a prescription. */
+  guidance: shortText(500),
+  /** One open question to sit with. */
+  reflectionQuestion: shortText(220),
+});
+
+export type TarotReadingDraft = z.infer<typeof tarotReadingDraftSchema>;

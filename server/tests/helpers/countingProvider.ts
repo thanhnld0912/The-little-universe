@@ -16,6 +16,7 @@ import { MockAIProvider } from '../../src/services/ai/MockAIProvider.js';
 export interface CountingProvider extends AIProvider {
   dailyCalls: number;
   weeklyCalls: number;
+  tarotCalls: number;
   totalCalls: () => number;
 }
 
@@ -29,6 +30,7 @@ export interface CountingProvider extends AIProvider {
 export function createCountingProvider(override?: {
   daily?: () => unknown;
   weekly?: () => unknown;
+  tarot?: () => unknown;
   name?: string;
 }): CountingProvider {
   const inner = new MockAIProvider();
@@ -37,8 +39,9 @@ export function createCountingProvider(override?: {
     name: override?.name ?? 'mock',
     dailyCalls: 0,
     weeklyCalls: 0,
+    tarotCalls: 0,
     totalCalls(): number {
-      return this.dailyCalls + this.weeklyCalls;
+      return this.dailyCalls + this.weeklyCalls + this.tarotCalls;
     },
     async generate(request: AIRequest): Promise<unknown> {
       switch (request.task) {
@@ -48,6 +51,9 @@ export function createCountingProvider(override?: {
         case 'weekly':
           this.weeklyCalls += 1;
           return override?.weekly ? override.weekly() : inner.generate(request);
+        case 'tarot':
+          this.tarotCalls += 1;
+          return override?.tarot ? override.tarot() : inner.generate(request);
         default:
           throw new Error(`Unexpected task in test: ${request.task}`);
       }

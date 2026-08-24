@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MockAIProvider } from '../src/services/ai/MockAIProvider.js';
+import type { AIProvider, AIRequest } from '../src/services/ai/AIProvider.js';
 import { buildDailyPrompt, buildWeeklyPrompt } from '../src/services/ai/prompts.js';
 import { buildAstronomyContext } from '../src/services/astronomy/index.js';
 import { testRequest } from './helpers/countingProvider.js';
@@ -15,33 +16,42 @@ import { testRequest } from './helpers/countingProvider.js';
 const provider = new MockAIProvider();
 const TZ = 'Asia/Ho_Chi_Minh';
 
-test('the provider exposes exactly one generation method', () => {
-  // Everything domain-specific — prompts, schemas, context assembly — belongs
-  // to the services. If a `generateTarotReading` ever appears on a provider,
-  // this fails.
-  const surface = Object.getOwnPropertyNames(MockAIProvider.prototype).filter(
-    (key) => key !== 'constructor',
-  );
-  assert.deepEqual(surface.filter((key) => !key.startsWith('_')).sort(), [
-    'daily',
-    'generate',
-    'weekly',
-  ]);
+test('a provider needs nothing beyond name and generate', async () => {
+  // The durable property, stated directly: an object with ONLY these two
+  // members is a complete provider. If any service ever reaches for a
+  // domain-specific method, this stops compiling and stops passing.
+  //
+  // An earlier version of this test enumerated MockAIProvider's prototype,
+  // which broke the moment the mock grew a private `tarot` helper — it was
+  // asserting the mock's shape rather than the interface's.
+  const minimal: AIProvider = {
+    name: 'minimal',
+    async generate(request: AIRequest) {
+      return { echoed: request.task };
+    },
+  };
 
-  // `daily` and `weekly` are private implementation detail of the MOCK.
-  // The interface a service depends on is `generate` alone.
-  const asInterface: { name: string; generate: unknown } = provider;
-  assert.equal(typeof asInterface.generate, 'function');
+  assert.deepEqual(Object.keys(minimal).sort(), ['generate', 'name']);
+  assert.deepEqual(await minimal.generate(testRequest('daily', 'seed')), { echoed: 'daily' });
 });
 
-test('an unknown task throws rather than returning something empty', async () => {
-  // A blank object would validate as "missing every field" and be retried, then
+test('an unimplemented task throws rather than returning something empty', async () => {
+  // 'message' arrives in Phase 6 and the mock has no output for it yet.
+  // A blank object would validate as "missing every field", be retried, and
   // surface as an upstream error — but silently returning {} for a task nobody
   // implemented is the kind of plausible failure this codebase refuses.
   await assert.rejects(
-    () => provider.generate(testRequest('tarot', 'seed')),
+    () => provider.generate(testRequest('message', 'seed')),
     /no output for task/,
   );
+});
+
+test('every task the services actually use is implemented by the mock', async () => {
+  // The complement of the test above: the tasks in use must NOT throw.
+  for (const task of ['daily', 'weekly', 'tarot']) {
+    const result = await provider.generate(testRequest(task, 'seed'));
+    assert.ok(result && typeof result === 'object', `${task} should produce output`);
+  }
 });
 
 test('the seed alone determines mock output', async () => {

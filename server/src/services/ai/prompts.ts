@@ -126,3 +126,67 @@ export function buildWeeklyPrompt(
     ].join('\n'),
   };
 }
+
+// --- tarot -------------------------------------------------------------------
+
+const TAROT_SHAPE = `Reply with ONE JSON object and nothing else. No markdown, no code fence.
+Exactly these keys, all required, no extras:
+
+{
+  "title": string,               // a short evocative title, 3-6 words
+  "summary": string,             // 1-2 sentences, the reading at a glance
+  "interpretation": string,      // 3-5 sentences, the heart of the reading
+  "guidance": string,            // 1-3 sentences, a gentle invitation
+  "reflectionQuestion": string   // one open question to sit with
+}`;
+
+const TAROT_RULE = `The card, its orientation and its traditional meaning below were determined by
+the application and are settled. Do not choose a different card. Do not change
+the orientation. Do not contradict the meaning given. Your task is to write the
+reflective reading around those facts.
+
+If the person asked a question, speak to it gently and without claiming to know
+the outcome. If they did not, write for someone simply looking for perspective.`;
+
+export interface TarotPromptContext {
+  card: {
+    name: string;
+    arcana: string;
+    suit: string | null;
+    numeral: string | null;
+    archetype: string;
+    keywords: string[];
+    /** The orientation-appropriate meaning, already chosen by the service. */
+    meaning: string;
+  };
+  orientation: 'upright' | 'reversed';
+  positionName: string;
+  question: string | null;
+  astronomy: AstronomyContext;
+}
+
+export function buildTarotPrompt(context: TarotPromptContext): PromptPair {
+  const { card } = context;
+  const lines = [
+    `Card: ${card.name}`,
+    `Arcana: ${card.arcana}${card.suit ? ` (${card.suit})` : ''}`,
+    card.numeral ? `Numeral: ${card.numeral}` : '',
+    `Archetype: ${card.archetype}`,
+    `Keywords: ${card.keywords.join(', ')}`,
+    `Orientation: ${context.orientation}`,
+    `Traditional meaning for this orientation: ${card.meaning}`,
+    `Position: ${context.positionName} of a single-card draw`,
+    '',
+    context.question
+      ? `The person asked: ${context.question}`
+      : 'The person did not ask a specific question.',
+    '',
+    'Calculated astronomical facts for today:',
+    describeAstronomy(context.astronomy),
+  ].filter((line) => line !== '');
+
+  return {
+    system: `${VOICE}\n\n${ASTRONOMY_RULE}\n\n${TAROT_RULE}\n\n${TAROT_SHAPE}`,
+    user: lines.join('\n'),
+  };
+}
