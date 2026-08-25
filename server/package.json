@@ -5,11 +5,12 @@
   "description": "Backend for The Little Universe — celestial daily readings, tarot and AI-written messages.",
   "type": "module",
   "engines": {
-    "node": "24.x"
+    "node": "22.x"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "diagnose:deps": "node scripts/diagnose-deps.mjs",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/src/server.js",
     "db:migrate": "tsx scripts/migrate.ts",
@@ -35,7 +36,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/morgan": "^1.9.9",
-    "@types/node": "^24.0.0",
+    "@types/node": "^22.14.0",
     "@types/pg": "^8.11.10",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2"
