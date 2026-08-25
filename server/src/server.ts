@@ -1,7 +1,7 @@
 /**
  * LOCAL DEVELOPMENT ENTRY POINT ONLY.
  *
- * Production runs on Vercel through `api/index.ts`, which exports the Express
+ * Production runs on Vercel through `src/vercel.ts`, which exports the Express
  * app without ever calling `listen`. Nothing here may be imported by that path.
  *
  * Modules are loaded dynamically so that a configuration failure can be

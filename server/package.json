@@ -8,7 +8,8 @@
     "node": "22.x"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/bundle.mjs",
+    "build:types": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "diagnose:deps": "node scripts/diagnose-deps.mjs",
     "dev": "tsx watch src/server.ts",
@@ -38,6 +39,7 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.11.10",
+    "esbuild": "^0.28.2",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2"
   }
