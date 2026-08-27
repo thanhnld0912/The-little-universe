@@ -20,6 +20,8 @@ export interface ApiResponse<T = unknown> {
     error?: { code?: string; message?: string; details?: unknown };
   };
   raw: string;
+  /** Response headers, so tests can assert on things like `set-cookie`. */
+  headers: Headers;
 }
 
 export interface TestServer {
@@ -66,7 +68,7 @@ export async function startTestServer(): Promise<TestServer> {
       } catch {
         // Left as {} — `raw` is asserted against directly when this happens.
       }
-      return { status: response.status, body, raw };
+      return { status: response.status, body, raw, headers: response.headers };
     },
 
     async close() {

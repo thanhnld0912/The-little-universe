@@ -18,20 +18,6 @@ export interface DayForecast {
   cosmicAdvice?: string;
 }
 
-export interface TarotCard {
-  id: string;
-  cardIndex: 'CARD I' | 'CARD II' | 'CARD III';
-  name: string;
-  numeral: string;
-  archetype: string;
-  keywords: string[];
-  element: string;
-  meaning: string;
-  guidance: string;
-  affirmation: string;
-  visualType: 'moon' | 'phases' | 'astrolabe';
-}
-
 export interface UniverseMessageResult {
   id: string;
   title: string;

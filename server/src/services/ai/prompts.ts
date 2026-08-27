@@ -99,6 +99,20 @@ export interface PromptPair {
   user: string;
 }
 
+/**
+ * The weekly forecast's own token budget, which must override `AI_MAX_TOKENS`.
+ *
+ * A weekly document is seven readings plus a summary in one response — several
+ * times the size of anything else here — and the default budget was set when
+ * only the mock existed, so it never had to fit a real reply. Left at the
+ * default, a real provider truncates the JSON mid-object, the schema rejects
+ * the fragment, the retry truncates identically, and the caller gets a 502
+ * whose cause looks nothing like "the answer was too long".
+ *
+ * It lives beside WEEKLY_SHAPE because that is what determines the size.
+ */
+export const WEEKLY_MAX_TOKENS = 3000;
+
 export function buildDailyPrompt(astronomy: AstronomyContext, dayName: string): PromptPair {
   return {
     system: `${VOICE}\n\n${ASTRONOMY_RULE}\n\n${DAILY_SHAPE}`,
@@ -187,6 +201,48 @@ export function buildTarotPrompt(context: TarotPromptContext): PromptPair {
 
   return {
     system: `${VOICE}\n\n${ASTRONOMY_RULE}\n\n${TAROT_RULE}\n\n${TAROT_SHAPE}`,
+    user: lines.join('\n'),
+  };
+}
+
+const MESSAGE_SHAPE = `Reply with ONE JSON object and nothing else. No markdown, no code fence.
+Keys, all required:
+  title           string  a short evocative title
+  subtitle        string  one line naming who this message is for
+  whisper         string  the message itself, two to four sentences
+  affirmation     string  one first-person line the reader can keep
+  actionGuidance  string  one gentle, concrete invitation
+  luckyNumber     integer 0-99
+  cosmicEnergy    string  a short evocative phrase, e.g. "Serene Moonlight"
+Add no other keys.`;
+
+const MESSAGE_RULE = `The mood was CHOSEN by the person and the sky below was CALCULATED. Write to that
+mood; do not rename it, argue with it, or tell them they feel something else.
+If they wrote something of their own, respond to it directly rather than
+writing around it. Never repeat their words back as though they were yours,
+never claim to know facts about their life, and never promise an outcome.`;
+
+export interface MessagePromptContext {
+  mood: string;
+  /** The person's own words, or null when they wrote nothing. */
+  prompt: string | null;
+  astronomy: AstronomyContext;
+}
+
+export function buildMessagePrompt(context: MessagePromptContext): PromptPair {
+  const lines = [
+    `Mood they chose: ${context.mood}`,
+    '',
+    context.prompt
+      ? `In their own words: ${context.prompt}`
+      : 'They wrote nothing of their own; write to the mood alone.',
+    '',
+    'Calculated astronomical facts for today:',
+    describeAstronomy(context.astronomy),
+  ].filter((line) => line !== '');
+
+  return {
+    system: `${VOICE}\n\n${ASTRONOMY_RULE}\n\n${MESSAGE_RULE}\n\n${MESSAGE_SHAPE}`,
     user: lines.join('\n'),
   };
 }

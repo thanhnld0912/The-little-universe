@@ -3,5 +3,8 @@
   "installCommand": "npm install && npm ci --prefix server",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/s/(.*)", "destination": "/index.html" }
+  ]
 }

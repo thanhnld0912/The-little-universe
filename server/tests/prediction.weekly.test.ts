@@ -14,6 +14,13 @@ import { queryAll, queryOne } from '../src/db/query.js';
 import { addDays, daysBetween, startOfIsoWeek } from '../src/utils/dates.js';
 import { MockAIProvider } from '../src/services/ai/MockAIProvider.js';
 
+/**
+ * One fixed subject for the whole file. Each test claims its own week, so this
+ * keeps them isolated while still exercising the real (subject, week_start)
+ * key. Cross-subject behaviour lives in prediction.subject.test.ts.
+ */
+const SUBJECT = 'visitor:22222222-2222-4222-8222-222222222222';
+
 const USED_WEEKS: string[] = [];
 
 /** `offsetWeeks` is in whole weeks from a known Monday, so weeks never overlap. */
@@ -60,7 +67,7 @@ function assertSevenConsecutiveDays(week: WeeklyPredictionDto): void {
 
 test('a first request generates a complete, well-formed week', async () => {
   const provider = createCountingProvider();
-  const week = await getWeeklyPrediction(claimWeek(0), provider);
+  const week = await getWeeklyPrediction(claimWeek(0), SUBJECT, provider);
 
   assert.equal(provider.weeklyCalls, 1);
   assertSevenConsecutiveDays(week);
@@ -83,10 +90,10 @@ test('THE CACHE: a second request performs ZERO additional AI generations', asyn
   const date = claimWeek(1);
   const provider = createCountingProvider();
 
-  const first = await getWeeklyPrediction(date, provider);
+  const first = await getWeeklyPrediction(date, SUBJECT, provider);
   assert.equal(provider.weeklyCalls, 1);
 
-  const second = await getWeeklyPrediction(date, provider);
+  const second = await getWeeklyPrediction(date, SUBJECT, provider);
 
   assert.equal(provider.weeklyCalls, 1, 'the second request must not call the provider');
   assert.deepEqual(second, first);
@@ -96,11 +103,11 @@ test('any day of the week resolves to the same cached forecast', async () => {
   const monday = startOfIsoWeek(claimWeek(2));
   const provider = createCountingProvider();
 
-  const fromMonday = await getWeeklyPrediction(monday, provider);
+  const fromMonday = await getWeeklyPrediction(monday, SUBJECT, provider);
 
   // Requesting by Wednesday, Friday or Sunday must not create a second week.
   for (const offset of [2, 4, 6]) {
-    const result = await getWeeklyPrediction(addDays(monday, offset), provider);
+    const result = await getWeeklyPrediction(addDays(monday, offset), SUBJECT, provider);
     assert.deepEqual(result, fromMonday);
   }
 
@@ -114,7 +121,7 @@ test('any day of the week resolves to the same cached forecast', async () => {
 
 test('exactly seven day rows are persisted', async () => {
   const date = claimWeek(3);
-  const week = await getWeeklyPrediction(date, createCountingProvider());
+  const week = await getWeeklyPrediction(date, SUBJECT, createCountingProvider());
 
   const rows = await queryAll<{ day_date: string }>(
     getPool(),
@@ -133,7 +140,7 @@ test('exactly seven day rows are persisted', async () => {
 });
 
 test('exactly one day is marked as the peak, and it matches brightestDay', async () => {
-  const week = await getWeeklyPrediction(claimWeek(4), createCountingProvider());
+  const week = await getWeeklyPrediction(claimWeek(4), SUBJECT, createCountingProvider());
 
   const peaks = week.days.filter((day) => day.isPeak);
   assert.equal(peaks.length, 1, 'exactly one peak day');
@@ -142,7 +149,7 @@ test('exactly one day is marked as the peak, and it matches brightestDay', async
 });
 
 test('the highlight appears only on the peak day', async () => {
-  const week = await getWeeklyPrediction(claimWeek(5), createCountingProvider());
+  const week = await getWeeklyPrediction(claimWeek(5), SUBJECT, createCountingProvider());
 
   for (const day of week.days) {
     if (day.isPeak) {
@@ -158,7 +165,7 @@ test('the highlight appears only on the peak day', async () => {
 });
 
 test('ungenerated columns are omitted, not sent as empty values', async () => {
-  const week = await getWeeklyPrediction(claimWeek(6), createCountingProvider());
+  const week = await getWeeklyPrediction(claimWeek(6), SUBJECT, createCountingProvider());
 
   for (const day of week.days) {
     // Nothing generates `energy` or `mood` because the UI renders neither.
@@ -170,10 +177,10 @@ test('ungenerated columns are omitted, not sent as empty values', async () => {
 
 test('a fresh provider instance reads the stored week rather than regenerating', async () => {
   const date = claimWeek(7);
-  const original = await getWeeklyPrediction(date, createCountingProvider());
+  const original = await getWeeklyPrediction(date, SUBJECT, createCountingProvider());
 
   const cold = createCountingProvider();
-  const again = await getWeeklyPrediction(date, cold);
+  const again = await getWeeklyPrediction(date, SUBJECT, cold);
 
   assert.equal(cold.weeklyCalls, 0);
   assert.deepEqual(again, original);
@@ -184,9 +191,9 @@ test('concurrent first requests produce one week and seven days', async () => {
   const provider = createCountingProvider();
 
   const results = await Promise.all([
-    getWeeklyPrediction(date, provider),
-    getWeeklyPrediction(date, provider),
-    getWeeklyPrediction(date, provider),
+    getWeeklyPrediction(date, SUBJECT, provider),
+    getWeeklyPrediction(date, SUBJECT, provider),
+    getWeeklyPrediction(date, SUBJECT, provider),
   ]);
 
   const weekStart = startOfIsoWeek(date);
@@ -231,7 +238,7 @@ test('a six-day week is rejected and never padded', async () => {
   });
 
   await assert.rejects(
-    () => getWeeklyPrediction(date, provider),
+    () => getWeeklyPrediction(date, SUBJECT, provider),
     (error: unknown) => (error as { code?: string }).code === 'UPSTREAM_ERROR',
   );
 
@@ -251,7 +258,7 @@ test('an eight-day week is rejected and never truncated', async () => {
   });
 
   await assert.rejects(
-    () => getWeeklyPrediction(date, provider),
+    () => getWeeklyPrediction(date, SUBJECT, provider),
     (error: unknown) => (error as { code?: string }).code === 'UPSTREAM_ERROR',
   );
 
@@ -271,7 +278,7 @@ test('a week with duplicate days is rejected', async () => {
   });
 
   await assert.rejects(
-    () => getWeeklyPrediction(date, provider),
+    () => getWeeklyPrediction(date, SUBJECT, provider),
     (error: unknown) => (error as { code?: string }).code === 'UPSTREAM_ERROR',
   );
 
@@ -291,7 +298,7 @@ test('a provider failure stores nothing and leaves the week free to retry', asyn
     },
   });
   await assert.rejects(
-    () => getWeeklyPrediction(date, failing),
+    () => getWeeklyPrediction(date, SUBJECT, failing),
     (error: unknown) => (error as { code?: string }).code === 'UPSTREAM_ERROR',
   );
 
@@ -301,7 +308,7 @@ test('a provider failure stores nothing and leaves the week free to retry', asyn
   assert.equal(empty.length, 0);
 
   const working = createCountingProvider();
-  const week = await getWeeklyPrediction(date, working);
+  const week = await getWeeklyPrediction(date, SUBJECT, working);
   assertSevenConsecutiveDays(week);
 });
 

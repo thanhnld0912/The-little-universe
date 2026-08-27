@@ -144,3 +144,46 @@ export const tarotReadingDraftSchema = z.strictObject({
 });
 
 export type TarotReadingDraft = z.infer<typeof tarotReadingDraftSchema>;
+
+/**
+ * The moods the message view offers. A closed set, matched by a CHECK
+ * constraint in the database, so an unrecognised mood cannot be stored and
+ * later fail to render.
+ */
+export const MESSAGE_MOODS = [
+  'quiet',
+  'romantic',
+  'hopeful',
+  'restless',
+  'peaceful',
+  'mystical',
+] as const;
+export type MessageMood = (typeof MESSAGE_MOODS)[number];
+
+/**
+ * A personal message.
+ *
+ * Note what the model is NOT asked for: the mood, the date, the celestial sign,
+ * or the person's own words. The mood is what they chose, the date is the
+ * application's, the sign is calculated from the sky, and their words are
+ * echoed back verbatim. Letting the model restate any of those would let it
+ * quietly contradict them.
+ */
+export const universeMessageDraftSchema = z.strictObject({
+  /** A short evocative title for the message. */
+  title: shortText(90),
+  /** One line naming who this message is for. */
+  subtitle: shortText(160),
+  /** The message itself. */
+  whisper: shortText(900),
+  /** A first-person line the reader can keep. */
+  affirmation: shortText(300),
+  /** A gentle, concrete invitation. Never an instruction or a prescription. */
+  actionGuidance: shortText(400),
+  /** Rendered as a two-digit string; kept in the range the UI has room for. */
+  luckyNumber: z.number().int().min(0).max(99),
+  /** A short evocative phrase, e.g. "Serene Moonlight". */
+  cosmicEnergy: shortText(60),
+});
+
+export type UniverseMessageDraft = z.infer<typeof universeMessageDraftSchema>;

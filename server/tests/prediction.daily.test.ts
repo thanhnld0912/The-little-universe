@@ -11,6 +11,16 @@ import { createCountingProvider, reservedDate } from './helpers/countingProvider
 import { getPool, closePool } from '../src/db/pool.js';
 import { queryAll, queryOne } from '../src/db/query.js';
 
+/**
+ * One fixed subject for the whole file.
+ *
+ * Readings are keyed by (subject, date) now, and every test here claims its own
+ * date, so a single subject keeps them isolated from one another while still
+ * exercising the real key. Cross-subject behaviour is covered separately in
+ * prediction.subject.test.ts.
+ */
+const SUBJECT = 'visitor:11111111-1111-4111-8111-111111111111';
+
 const USED_DATES: string[] = [];
 
 function claimDate(offset: number): string {
@@ -32,7 +42,7 @@ test('a first request generates, stores and returns a complete reading', async (
   const date = claimDate(100);
   const provider = createCountingProvider();
 
-  const result = await getDailyPrediction(date, provider);
+  const result = await getDailyPrediction(date, SUBJECT, provider);
 
   assert.equal(provider.dailyCalls, 1);
   assert.equal(result.date, date);
@@ -56,10 +66,10 @@ test('THE CACHE: a second request performs ZERO additional AI generations', asyn
   const date = claimDate(101);
   const provider = createCountingProvider();
 
-  const first = await getDailyPrediction(date, provider);
+  const first = await getDailyPrediction(date, SUBJECT, provider);
   assert.equal(provider.dailyCalls, 1, 'the first request should generate exactly once');
 
-  const second = await getDailyPrediction(date, provider);
+  const second = await getDailyPrediction(date, SUBJECT, provider);
 
   // The requirement, stated exactly: still 1, not 2.
   assert.equal(provider.dailyCalls, 1, 'the second request must not call the provider');
@@ -70,9 +80,9 @@ test('repeated refreshes never regenerate, however many times the user reloads',
   const date = claimDate(102);
   const provider = createCountingProvider();
 
-  const first = await getDailyPrediction(date, provider);
+  const first = await getDailyPrediction(date, SUBJECT, provider);
   for (let index = 0; index < 5; index += 1) {
-    const repeat = await getDailyPrediction(date, provider);
+    const repeat = await getDailyPrediction(date, SUBJECT, provider);
     assert.deepEqual(repeat, first);
   }
 
@@ -86,13 +96,13 @@ test('a fresh provider instance still reads from the database, not from memory',
   const date = claimDate(103);
 
   const first = createCountingProvider();
-  const original = await getDailyPrediction(date, first);
+  const original = await getDailyPrediction(date, SUBJECT, first);
   assert.equal(first.dailyCalls, 1);
 
   // A different provider object stands in for a different serverless instance:
   // the cache must live in Postgres, not in process memory.
   const second = createCountingProvider();
-  const again = await getDailyPrediction(date, second);
+  const again = await getDailyPrediction(date, SUBJECT, second);
 
   assert.equal(second.dailyCalls, 0, 'a cold instance must not regenerate an existing date');
   assert.deepEqual(again, original);
@@ -103,17 +113,17 @@ test('different dates each generate exactly once', async () => {
   const second = claimDate(105);
   const provider = createCountingProvider();
 
-  await getDailyPrediction(first, provider);
-  await getDailyPrediction(second, provider);
-  await getDailyPrediction(first, provider);
-  await getDailyPrediction(second, provider);
+  await getDailyPrediction(first, SUBJECT, provider);
+  await getDailyPrediction(second, SUBJECT, provider);
+  await getDailyPrediction(first, SUBJECT, provider);
+  await getDailyPrediction(second, SUBJECT, provider);
 
   assert.equal(provider.dailyCalls, 2, 'two dates, two generations, no more');
 });
 
 test('the stored row records which provider wrote it', async () => {
   const date = claimDate(106);
-  await getDailyPrediction(date, createCountingProvider({ name: 'mock' }));
+  await getDailyPrediction(date, SUBJECT, createCountingProvider({ name: 'mock' }));
 
   const row = await queryOne<{ model: string }>(
     getPool(),
@@ -125,7 +135,7 @@ test('the stored row records which provider wrote it', async () => {
 
 test('the date is stored and returned exactly, with no timezone drift', async () => {
   const date = claimDate(107);
-  const result = await getDailyPrediction(date, createCountingProvider());
+  const result = await getDailyPrediction(date, SUBJECT, createCountingProvider());
 
   assert.equal(result.date, date);
 
@@ -148,9 +158,9 @@ test('concurrent first requests produce one row and one reading', async () => {
   // Both may generate; the database decides which row survives, and every
   // caller must receive that same one.
   const results = await Promise.all([
-    getDailyPrediction(date, provider),
-    getDailyPrediction(date, provider),
-    getDailyPrediction(date, provider),
+    getDailyPrediction(date, SUBJECT, provider),
+    getDailyPrediction(date, SUBJECT, provider),
+    getDailyPrediction(date, SUBJECT, provider),
   ]);
 
   const rows = await queryAll(getPool(), 'SELECT id FROM daily_predictions WHERE date = $1', [date]);
@@ -166,7 +176,7 @@ test('invalid AI output is never stored and surfaces as a controlled error', asy
   const provider = createCountingProvider({ daily: () => ({ theme: 'incomplete' }) });
 
   await assert.rejects(
-    () => getDailyPrediction(date, provider),
+    () => getDailyPrediction(date, SUBJECT, provider),
     (error: unknown) => {
       const app = error as { code?: string; status?: number };
       assert.equal(app.code, 'UPSTREAM_ERROR');
@@ -190,7 +200,7 @@ test('a provider failure surfaces as a controlled error and stores nothing', asy
   });
 
   await assert.rejects(
-    () => getDailyPrediction(date, provider),
+    () => getDailyPrediction(date, SUBJECT, provider),
     (error: unknown) => (error as { code?: string }).code === 'UPSTREAM_ERROR',
   );
 
@@ -206,18 +216,18 @@ test('a failed generation leaves the date free to succeed later', async () => {
       throw new Error('temporary outage');
     },
   });
-  await assert.rejects(() => getDailyPrediction(date, failing));
+  await assert.rejects(() => getDailyPrediction(date, SUBJECT, failing));
 
   // The earlier failure must not have poisoned the date with a partial row.
   const working = createCountingProvider();
-  const result = await getDailyPrediction(date, working);
+  const result = await getDailyPrediction(date, SUBJECT, working);
   assert.equal(result.date, date);
   assert.equal(working.dailyCalls, 1);
 });
 
 test('the astronomy snapshot is persisted with a generated reading', async () => {
   const date = claimDate(112);
-  await getDailyPrediction(date, createCountingProvider());
+  await getDailyPrediction(date, SUBJECT, createCountingProvider());
 
   const row = await queryOne<{ astronomy: Record<string, unknown> | null }>(
     getPool(),
@@ -242,7 +252,7 @@ test('the astronomy snapshot is persisted with a generated reading', async () =>
 
 test('the snapshot matches what the astronomy service computes for that date', async () => {
   const date = claimDate(113);
-  await getDailyPrediction(date, createCountingProvider());
+  await getDailyPrediction(date, SUBJECT, createCountingProvider());
 
   const row = await queryOne<{ astronomy: unknown }>(
     getPool(),
@@ -256,6 +266,6 @@ test('the snapshot matches what the astronomy service computes for that date', a
 test('the astronomy snapshot is not exposed in the API response', async () => {
   // Storing it is for reproducibility; the response contract is unchanged.
   const date = claimDate(114);
-  const result = await getDailyPrediction(date, createCountingProvider());
+  const result = await getDailyPrediction(date, SUBJECT, createCountingProvider());
   assert.ok(!('astronomy' in result), 'the daily DTO must not have gained a field');
 });

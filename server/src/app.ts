@@ -6,7 +6,9 @@ import { env, isProduction, isTest } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { healthRoutes } from './routes/health.routes.js';
+import { messageRoutes } from './routes/message.routes.js';
 import { predictionRoutes } from './routes/prediction.routes.js';
+import { shareRoutes } from './routes/share.routes.js';
 import { tarotRoutes } from './routes/tarot.routes.js';
 import { AppError } from './utils/errors.js';
 
@@ -51,6 +53,8 @@ export function createApp(): Express {
   app.use('/api/auth', authRoutes);
   app.use('/api/predictions', predictionRoutes);
   app.use('/api/tarot', tarotRoutes);
+  app.use('/api/messages', messageRoutes);
+  app.use('/api/shares', shareRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

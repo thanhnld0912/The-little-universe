@@ -7,7 +7,9 @@ import { ZodError } from 'zod';
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import type { AIProvider } from './AIProvider.js';
+import { GeminiProvider } from './GeminiProvider.js';
 import { MockAIProvider } from './MockAIProvider.js';
+import { OpenAIProvider } from './OpenAIProvider.js';
 
 let cached: AIProvider | undefined;
 
@@ -15,10 +17,12 @@ let cached: AIProvider | undefined;
  * Resolves the configured provider.
  *
  * `env.ts` has already refused to boot if a provider was selected without its
- * credentials, so the only failure reachable here is a provider that has not
- * been built yet. It throws rather than quietly falling back to the mock:
- * a deployment that believes it is calling OpenAI and is actually serving
- * canned text is a far worse outcome than a loud startup failure.
+ * credentials, so a provider constructed here has what it needs.
+ *
+ * There is NO fallback to the mock on failure, deliberately: a deployment that
+ * believes it is calling a model and is quietly serving canned text is a far
+ * worse outcome than a loud startup failure, and it is the kind of thing
+ * nobody notices for weeks.
  */
 export function getAIProvider(): AIProvider {
   if (cached) return cached;
@@ -28,11 +32,11 @@ export function getAIProvider(): AIProvider {
       cached = new MockAIProvider();
       return cached;
     case 'openai':
+      cached = new OpenAIProvider();
+      return cached;
     case 'gemini':
-      throw new Error(
-        `AI_PROVIDER=${env.AI_PROVIDER} is not implemented yet (arriving in Phase 6). ` +
-          `Set AI_PROVIDER=mock to run without an API key.`,
-      );
+      cached = new GeminiProvider();
+      return cached;
     default: {
       // Unreachable while the env enum holds, but fails closed if it changes.
       const exhaustive: never = env.AI_PROVIDER;
@@ -93,3 +97,5 @@ export async function generateValidated<T>(
 }
 
 export type { AIProvider } from './AIProvider.js';
+export { GeminiProvider } from './GeminiProvider.js';
+export { OpenAIProvider } from './OpenAIProvider.js';

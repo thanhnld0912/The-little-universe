@@ -36,19 +36,19 @@ test('a provider needs nothing beyond name and generate', async () => {
 });
 
 test('an unimplemented task throws rather than returning something empty', async () => {
-  // 'message' arrives in Phase 6 and the mock has no output for it yet.
   // A blank object would validate as "missing every field", be retried, and
   // surface as an upstream error — but silently returning {} for a task nobody
   // implemented is the kind of plausible failure this codebase refuses.
+  // 'sharing' is a task no service asks for yet; 'message' now exists.
   await assert.rejects(
-    () => provider.generate(testRequest('message', 'seed')),
+    () => provider.generate(testRequest('sharing', 'seed')),
     /no output for task/,
   );
 });
 
 test('every task the services actually use is implemented by the mock', async () => {
   // The complement of the test above: the tasks in use must NOT throw.
-  for (const task of ['daily', 'weekly', 'tarot']) {
+  for (const task of ['daily', 'weekly', 'tarot', 'message']) {
     const result = await provider.generate(testRequest(task, 'seed'));
     assert.ok(result && typeof result === 'object', `${task} should produce output`);
   }

@@ -51,6 +51,17 @@ const envSchema = z
     GEMINI_API_KEY: optional(z.string().min(1).optional()),
     GEMINI_MODEL: optional(z.string().min(1).default('gemini-2.0-flash')),
 
+    /**
+     * How much the model is allowed to vary between calls.
+     *
+     * This is the knob that decides whether two people get different readings.
+     * Every visitor with the same date sees the same prompt — the astronomy is
+     * a shared fact — so variation is the ONLY thing separating their text.
+     * Set this near 0 and a real provider regresses to the sameness the mock
+     * had, with an API bill attached.
+     */
+    AI_TEMPERATURE: optional(z.coerce.number().min(0).max(2).default(0.9)),
+
     AI_MAX_TOKENS: optional(z.coerce.number().int().positive().max(8192).default(900)),
     AI_TIMEOUT_MS: optional(z.coerce.number().int().positive().max(120_000).default(20_000)),
 

@@ -74,6 +74,7 @@ const WEEKLY_DAY_COLUMNS = `
 // --- daily -----------------------------------------------------------------
 
 export interface InsertDailyInput {
+  subjectId: string;
   date: string;
   theme: string;
   energy: string;
@@ -94,21 +95,25 @@ export interface InsertDailyInput {
 export async function findDailyByDate(
   db: Queryable,
   date: string,
+  subjectId: string,
 ): Promise<DailyPredictionRow | undefined> {
   return queryOne<DailyPredictionRow>(
     db,
-    `SELECT ${DAILY_COLUMNS} FROM daily_predictions WHERE date = $1`,
-    [date],
+    `SELECT ${DAILY_COLUMNS}
+       FROM daily_predictions
+      WHERE subject_id = $1 AND date = $2`,
+    [subjectId, date],
   );
 }
 
 /**
  * Inserts a prediction unless one already exists for that date.
  *
- * `ON CONFLICT (date) DO NOTHING` closes the race that a plain SELECT-then-
- * INSERT leaves open: two cold serverless instances handling the first request
- * of the day would both see no row, both generate, and both insert. Here the
- * loser's insert is a no-op and it reads the winner's row instead.
+ * `ON CONFLICT (subject_id, date) DO NOTHING` closes the race that a plain
+ * SELECT-then-INSERT leaves open: two cold serverless instances handling the
+ * same subject's first request of the day would both see no row, both
+ * generate, and both insert. Here the loser's insert is a no-op and it reads
+ * the winner's row instead.
  *
  * Returns `undefined` when another writer won, which is a normal outcome and
  * not an error.
@@ -120,13 +125,14 @@ export async function insertDailyIfAbsent(
   return queryOne<DailyPredictionRow>(
     db,
     `INSERT INTO daily_predictions
-       (date, theme, energy, energy_score, lucky_color, lucky_color_hex,
-        lucky_number, mood, prediction_text, cosmic_quote, cosmic_sign,
-        element, sound_frequency, model, astronomy)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-     ON CONFLICT (date) DO NOTHING
+       (subject_id, date, theme, energy, energy_score, lucky_color,
+        lucky_color_hex, lucky_number, mood, prediction_text, cosmic_quote,
+        cosmic_sign, element, sound_frequency, model, astronomy)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+     ON CONFLICT (subject_id, date) DO NOTHING
      RETURNING ${DAILY_COLUMNS}`,
     [
+      input.subjectId,
       input.date,
       input.theme,
       input.energy,
@@ -149,6 +155,7 @@ export async function insertDailyIfAbsent(
 // --- weekly ----------------------------------------------------------------
 
 export interface InsertWeeklyInput {
+  subjectId: string;
   weekStart: string;
   weekEnd: string;
   summary: string;
@@ -175,11 +182,14 @@ export interface InsertWeeklyDayInput {
 export async function findWeeklyByStart(
   db: Queryable,
   weekStart: string,
+  subjectId: string,
 ): Promise<WeeklyPredictionRow | undefined> {
   return queryOne<WeeklyPredictionRow>(
     db,
-    `SELECT ${WEEKLY_COLUMNS} FROM weekly_predictions WHERE week_start = $1`,
-    [weekStart],
+    `SELECT ${WEEKLY_COLUMNS}
+       FROM weekly_predictions
+      WHERE subject_id = $1 AND week_start = $2`,
+    [subjectId, weekStart],
   );
 }
 
@@ -195,7 +205,7 @@ export async function findWeeklyDays(db: Queryable, weeklyId: string): Promise<W
   );
 }
 
-/** Same race-safe strategy as the daily insert, keyed on week_start. */
+/** Same race-safe strategy as the daily insert, keyed on (subject, week_start). */
 export async function insertWeeklyIfAbsent(
   db: Queryable,
   input: InsertWeeklyInput,
@@ -203,12 +213,13 @@ export async function insertWeeklyIfAbsent(
   return queryOne<WeeklyPredictionRow>(
     db,
     `INSERT INTO weekly_predictions
-       (week_start, week_end, summary, brightest_day, highlight_title,
-        highlight_quote, model, astronomy)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-     ON CONFLICT (week_start) DO NOTHING
+       (subject_id, week_start, week_end, summary, brightest_day,
+        highlight_title, highlight_quote, model, astronomy)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (subject_id, week_start) DO NOTHING
      RETURNING ${WEEKLY_COLUMNS}`,
     [
+      input.subjectId,
       input.weekStart,
       input.weekEnd,
       input.summary,

@@ -12,7 +12,7 @@ import {
   type WeeklyPredictionRow,
 } from '../repositories/prediction.repository.js';
 import { generateValidated, getAIProvider } from './ai/index.js';
-import { buildDailyPrompt, buildWeeklyPrompt } from './ai/prompts.js';
+import { buildDailyPrompt, buildWeeklyPrompt, WEEKLY_MAX_TOKENS } from './ai/prompts.js';
 import { buildAstronomyContext } from './astronomy/index.js';
 import type { AIProvider } from './ai/AIProvider.js';
 import { dailyPredictionDraftSchema, weeklyPredictionDraftSchema } from './ai/schemas.js';
@@ -180,19 +180,26 @@ export function assertWholeWeek(
 // --- daily -----------------------------------------------------------------
 
 /**
- * Returns the prediction for `date`, generating it only if none exists.
+ * Returns `subjectId`'s prediction for `date`, generating it only if none
+ * exists.
  *
- * THE DATABASE IS THE SOURCE OF TRUTH. A date has at most one prediction, for
- * its whole lifetime. Refreshing the page re-reads that row; it never produces
- * a new reading, and never calls the provider again.
+ * THE DATABASE IS THE SOURCE OF TRUTH. A subject has at most one prediction per
+ * date, for its whole lifetime. Refreshing the page re-reads that row; it never
+ * produces a new reading, and never calls the provider again.
+ *
+ * Two subjects asking for the same date get two different readings, because the
+ * seed carries the subject. The astronomy underneath them is identical, and
+ * deliberately so: the moon phase on a given day is a fact about the sky, not
+ * about the reader.
  */
 export async function getDailyPrediction(
   date: string,
+  subjectId: string,
   provider: AIProvider = getAIProvider(),
 ): Promise<DailyPredictionDto> {
   const pool = getPool();
 
-  const existing = await findDailyByDate(pool, date);
+  const existing = await findDailyByDate(pool, date, subjectId);
   if (existing) return toDailyDto(existing);
 
   // Deterministic facts FIRST. The model is told what the sky is doing; it is
@@ -200,11 +207,14 @@ export async function getDailyPrediction(
   const astronomy = buildAstronomyContext(date);
   const prompt = buildDailyPrompt(astronomy, dayNameOf(date));
 
-  const draft = await generateValidated(`daily:${date}`, dailyPredictionDraftSchema, () =>
-    provider.generate({ task: 'daily', ...prompt, seed: date }),
+  const draft = await generateValidated(
+    `daily:${date}:${subjectId}`,
+    dailyPredictionDraftSchema,
+    () => provider.generate({ task: 'daily', ...prompt, seed: `${date}:${subjectId}` }),
   );
 
   const inserted = await insertDailyIfAbsent(pool, {
+    subjectId,
     date,
     theme: draft.theme,
     energy: draft.energy,
@@ -224,9 +234,10 @@ export async function getDailyPrediction(
 
   if (inserted) return toDailyDto(inserted);
 
-  // Another request generated and stored this date first. Its row wins; ours
-  // is discarded. Both callers see the same reading, which is the point.
-  const winner = await findDailyByDate(pool, date);
+  // Another request for this same subject and date generated and stored first.
+  // Its row wins; ours is discarded. Both callers see the same reading, which
+  // is the point.
+  const winner = await findDailyByDate(pool, date, subjectId);
   if (!winner) {
     throw AppError.upstream("Today's reading could not be saved. Please try again.");
   }
@@ -249,25 +260,36 @@ async function readWeek(
 }
 
 /**
- * Returns the forecast for the ISO week containing `date`, generating it only
- * if none exists. One forecast per week, for the life of that week.
+ * Returns `subjectId`'s forecast for the ISO week containing `date`, generating
+ * it only if none exists. One forecast per subject per week, for the life of
+ * that week.
  */
 export async function getWeeklyPrediction(
   date: string,
+  subjectId: string,
   provider: AIProvider = getAIProvider(),
 ): Promise<WeeklyPredictionDto> {
   const pool = getPool();
   const weekStart = startOfIsoWeek(date);
   const weekEnd = endOfIsoWeek(date);
 
-  const existing = await findWeeklyByStart(pool, weekStart);
+  const existing = await findWeeklyByStart(pool, weekStart, subjectId);
   if (existing) return readWeek(pool, existing);
 
   const astronomy = buildAstronomyContext(weekStart);
   const prompt = buildWeeklyPrompt(astronomy, weekStart, weekEnd);
 
-  const draft = await generateValidated(`weekly:${weekStart}`, weeklyPredictionDraftSchema, () =>
-    provider.generate({ task: 'weekly', ...prompt, seed: weekStart }),
+  const draft = await generateValidated(
+    `weekly:${weekStart}:${subjectId}`,
+    weeklyPredictionDraftSchema,
+    () =>
+      provider.generate({
+        task: 'weekly',
+        ...prompt,
+        seed: `${weekStart}:${subjectId}`,
+        // Seven readings in one document need more room than a single day.
+        maxTokens: WEEKLY_MAX_TOKENS,
+      }),
   );
 
   // The model supplies a day INDEX; the real date comes from the requested
@@ -301,6 +323,7 @@ export async function getWeeklyPrediction(
 
   return withTransaction(async (client) => {
     const inserted = await insertWeeklyIfAbsent(client, {
+      subjectId,
       weekStart,
       weekEnd,
       summary: draft.summary,
@@ -320,7 +343,7 @@ export async function getWeeklyPrediction(
 
     // Lost the race. `ON CONFLICT` waited for the winning transaction to
     // finish, so its week and its seven days are both visible now.
-    const winner = await findWeeklyByStart(client, weekStart);
+    const winner = await findWeeklyByStart(client, weekStart, subjectId);
     if (!winner) {
       throw AppError.upstream("This week's forecast could not be saved. Please try again.");
     }

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { MoodType, UniverseMessageResult } from '../types';
-import { MOOD_CONFIG, PRESET_UNIVERSE_MESSAGES } from '../data/cosmicData';
+import { MOOD_CONFIG } from '../data/cosmicData';
+import { createUniverseMessage, type ShareTarget } from '../services/api';
 import { Sparkles, Mail, Send, RotateCcw, Copy, Check, Compass, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface YourMessageViewProps {
-  onOpenShare: () => void;
+  /** Takes what to share; the message id lives in this component's state. */
+  onOpenShare: (target: ShareTarget | null) => void;
 }
 
 type MessageStage = 'input' | 'envelope' | 'revealed';
@@ -17,22 +19,43 @@ export const YourMessageView: React.FC<YourMessageViewProps> = ({ onOpenShare })
   const [isGenerating, setIsGenerating] = useState(false);
   const [messageResult, setMessageResult] = useState<UniverseMessageResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | undefined>();
 
   const charLimit = 200;
 
-  const handleCreateMessage = () => {
+  const handleCreateMessage = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
-      // Create personalized message based on mood & prompt
-      const basePreset = PRESET_UNIVERSE_MESSAGES[selectedMood];
-      const customResult: UniverseMessageResult = {
-        ...basePreset,
-        userPrompt: prompt.trim() || undefined,
-      };
-      setMessageResult(customResult);
+    setError(undefined);
+
+    try {
+      const message = await createUniverseMessage(selectedMood, prompt);
+      setMessageResult({
+        id: message.id,
+        title: message.title,
+        subtitle: message.subtitle,
+        // Formatted here rather than on the server: how a date is written is a
+        // presentation choice, and the server sends the unambiguous ISO form.
+        dateStr: new Date(`${message.date}T00:00:00`).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        celestialSign: message.celestialSign,
+        mood: message.mood,
+        userPrompt: message.userPrompt,
+        whisper: message.whisper,
+        affirmation: message.affirmation,
+        actionGuidance: message.actionGuidance,
+        luckyNumber: message.luckyNumber,
+        cosmicEnergy: message.cosmicEnergy,
+      });
+      setStage('envelope');
+    } catch (caught) {
+      // Stay on the input stage so their words are still there to retry with.
+      setError(caught instanceof Error ? caught.message : 'Your message could not be written.');
+    } finally {
       setIsGenerating(false);
-      setStage('envelope'); // Transition to Image 13 envelope screen
-    }, 600);
+    }
   };
 
   const handleOpenEnvelope = () => {
@@ -44,6 +67,7 @@ export const YourMessageView: React.FC<YourMessageViewProps> = ({ onOpenShare })
     setPrompt('');
     setSelectedMood('quiet');
     setMessageResult(null);
+    setError(undefined);
   };
 
   const handleCopyMessage = () => {
@@ -149,6 +173,15 @@ export const YourMessageView: React.FC<YourMessageViewProps> = ({ onOpenShare })
                   </>
                 )}
               </button>
+
+              {error !== undefined && (
+                <p
+                  role="alert"
+                  className="mt-4 text-center font-sans-ui text-xs text-[#FCA5A5]"
+                >
+                  {error}
+                </p>
+              )}
             </div>
           </motion.div>
         )}
@@ -305,7 +338,9 @@ export const YourMessageView: React.FC<YourMessageViewProps> = ({ onOpenShare })
 
                 <div className="flex items-center gap-2.5">
                   <button
-                    onClick={onOpenShare}
+                    onClick={() =>
+                      onOpenShare(messageResult ? { kind: 'message', messageId: messageResult.id } : null)
+                    }
                     className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors"
                   >
                     <Share2 className="w-3.5 h-3.5 text-[#E5C98D]" />

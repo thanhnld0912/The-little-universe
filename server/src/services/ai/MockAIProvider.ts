@@ -127,46 +127,120 @@ const GEMSTONES = [
   'Selenite',
 ] as const;
 
+/**
+ * Several options per day type, not one.
+ *
+ * `pick` is seed-driven, so a single-element list would return the same string
+ * for every seed and every reader would see an identical week however the
+ * reading is keyed. The variety has to exist in the content for the seed to
+ * have anything to choose between.
+ */
 const TAGLINES: Record<DayType, readonly string[]> = {
-  QUIET: ['A gentle start. Observing may serve you better than acting.'],
-  FLOW: ['Momentum gathers. Small tasks might find their rhythm.'],
-  PIVOT: ['The week turns. This could be a moment to realign.'],
-  CLARITY: ['Insight may arrive quietly. A good day for complex thought.'],
-  PEAK: ['Your brightest day.'],
-  REST: ['Withdrawing to recharge could be the kindest choice.'],
-  REFLECT: ["Integrating the week's lessons. Prepare gently."],
+  QUIET: [
+    'A gentle start. Observing may serve you better than acting.',
+    'The week opens softly. There may be no need to hurry it.',
+    'A slow beginning, which is still a beginning.',
+  ],
+  FLOW: [
+    'Momentum gathers. Small tasks might find their rhythm.',
+    'Things may move more easily than they did yesterday.',
+    'A day that could carry you rather than ask to be carried.',
+  ],
+  PIVOT: [
+    'The week turns. This could be a moment to realign.',
+    'A hinge in the week. Small corrections may count for a lot.',
+    'Direction may matter more than speed today.',
+  ],
+  CLARITY: [
+    'Insight may arrive quietly. A good day for complex thought.',
+    'Something blurred may come into focus.',
+    'A clear-headed day, if you give it room.',
+  ],
+  PEAK: [
+    'Your brightest day.',
+    'The high point of the week.',
+    'The week may be at its warmest here.',
+  ],
+  REST: [
+    'Withdrawing to recharge could be the kindest choice.',
+    'A day that may ask less of you than you expect.',
+    'Quiet is not idleness. This could be a day for it.',
+  ],
+  REFLECT: [
+    "Integrating the week's lessons. Prepare gently.",
+    'A good day to look back before looking forward.',
+    'The week closes. It may be worth closing it kindly.',
+  ],
 };
 
 const ADVICE: Record<DayType, readonly string[]> = {
   QUIET: [
     'You might let your thoughts settle before making any large commitment. There is no prize for deciding first.',
+    'Today could reward listening over speaking. What you notice now may be useful later in the week.',
+    'You may not need to force anything into motion yet. Starting slowly is still starting.',
   ],
   FLOW: [
     'What felt heavy earlier may move with surprising ease today. This could be a good moment to use that.',
+    'Momentum may be on your side. You might spend it on the thing you have been postponing.',
+    'Small tasks could fall into place quickly today. Letting them may clear space for something larger.',
   ],
   PIVOT: [
     'A midweek turning point may be worth noticing. You could check your direction without judging where you have been.',
+    'You might change your mind today without calling it a failure. Adjusting is not starting over.',
+    'A small correction now could save a longer detour later. It may be worth pausing to make it.',
   ],
   CLARITY: [
     'The mental fog may lift a little. Something you have been circling could resolve in a single quiet moment.',
+    'Today could be a good day for the thinking you have been avoiding. It may be less tangled than it looks.',
+    'An answer you already half-know may finish arriving. You might simply let it.',
   ],
   PEAK: [
     'This may be a day to stay open to what you did not plan. Warmth, company and small serendipities could all find you easily.',
+    'Whatever you have been building toward may be worth showing today. You might let yourself be seen doing it.',
+    'Good things could arrive without being arranged. You may only need to be available to them.',
   ],
   REST: [
     'You might turn down the volume of the world today. Rest is not something you have to earn first.',
+    'You could do considerably less today than you planned, and lose nothing by it.',
+    'Today may be better spent recovering than proving. Both are work.',
   ],
   REFLECT: [
     'You could look back at the week with more generosity than you feel it deserves. Then let it close.',
+    'You might notice what actually went well. It is easy to keep only the difficult parts.',
+    'The week is ending. You may let it end without settling every open thing in it.',
   ],
 };
 
+/** Seed-picked as well, so the summary card is not identical for everyone. */
+const WEEK_SUMMARIES: readonly string[] = [
+  'A subtle alignment of energies. The week may begin softly and gather warmth toward its middle; you might find the quieter days are the ones that hold the most.',
+  'A week that may reward patience early and momentum later. What feels slow at the start could simply be the beginning of something with a longer shape.',
+  'The week may ask for less effort than you expect and more attention than you plan for. Its warmest stretch could arrive without announcing itself.',
+  'An uneven but kind week. Some days may carry you and others may ask you to carry them, and both could be worth the same in the end.',
+];
+
+const HIGHLIGHT_TITLES: readonly string[] = [
+  'Your brightest day',
+  'The warmest point of your week',
+  'Where the week opens up',
+  "The week's high note",
+];
+
+const HIGHLIGHT_QUOTES: readonly string[] = [
+  'Something unexpectedly lovely may happen.',
+  'You might find the day meets you halfway.',
+  'A small good thing could arrive without warning.',
+  'The week may be quietly on your side here.',
+];
+
 /**
  * The seven day types laid out Monday to Sunday. Exactly one PEAK, which the
- * schema requires and which the weekly summary refers to. The peak sits on
- * Friday because the current UI renders the fifth slot as its highlighted
- * card; that coupling is a frontend limitation recorded for Phase 8, not a
- * property of the data model, which allows any day to be the brightest.
+ * schema requires and which the weekly summary refers to.
+ *
+ * Friday is an arbitrary choice, NOT a constraint. The view used to read
+ * `days[4]` and label it FRIDAY regardless of the data; it now finds the peak
+ * by its `isPeak` flag, so a real provider may mark any day of the week and the
+ * page follows it.
  */
 const WEEK_SHAPE: readonly DayType[] = [
   'QUIET',
@@ -204,6 +278,8 @@ export class MockAIProvider implements AIProvider {
         return this.weekly(seed);
       case 'tarot':
         return this.tarot(seed);
+      case 'message':
+        return this.message(seed);
       default:
         throw new Error(
           `MockAIProvider has no output for task ${JSON.stringify(request.task)}`,
@@ -247,11 +323,10 @@ export class MockAIProvider implements AIProvider {
     }));
 
     return {
-      summary:
-        'A subtle alignment of energies. The week may begin softly and gather warmth toward its middle; you might find the quieter days are the ones that hold the most.',
+      summary: pick(WEEK_SUMMARIES, seed, 'summary'),
       brightestDayIndex,
-      highlightTitle: 'Your brightest day',
-      highlightQuote: 'Something unexpectedly lovely may happen.',
+      highlightTitle: pick(HIGHLIGHT_TITLES, seed, 'highlightTitle'),
+      highlightQuote: pick(HIGHLIGHT_QUOTES, seed, 'highlightQuote'),
       days,
     };
   }
@@ -264,6 +339,24 @@ export class MockAIProvider implements AIProvider {
    * is written around them. A mock that invented a card name would be
    * imitating a provider we would not accept.
    */
+  /**
+   * The seed carries the mood, the person's own words and their subject, so two
+   * people choosing the same mood on the same day still receive different
+   * messages. Every list has several entries for the same reason the weekly
+   * lists do: `pick` can only vary across what it is given.
+   */
+  private message(seed: string): unknown {
+    return {
+      title: pick(MESSAGE_TITLES, seed, 'title'),
+      subtitle: pick(MESSAGE_SUBTITLES, seed, 'subtitle'),
+      whisper: pick(MESSAGE_WHISPERS, seed, 'whisper'),
+      affirmation: pick(MESSAGE_AFFIRMATIONS, seed, 'affirmation'),
+      actionGuidance: pick(MESSAGE_GUIDANCE, seed, 'guidance'),
+      luckyNumber: score(seed, 'lucky', 1, 99),
+      cosmicEnergy: pick(MESSAGE_ENERGIES, seed, 'energy'),
+    };
+  }
+
   private tarot(seed: string): unknown {
     return {
       title: pick(TAROT_TITLES, seed, 'title'),
@@ -310,3 +403,65 @@ const TAROT_QUESTIONS = [
 /** Exposed so a test can assert the mock covers every declared day type. */
 export const MOCK_WEEK_SHAPE = WEEK_SHAPE;
 export const ALL_DAY_TYPES = DAY_TYPES;
+
+// --- message ---------------------------------------------------------------
+
+const MESSAGE_TITLES = [
+  'A Whisper of Soft Assurance',
+  'A Thread of Starlight',
+  'Something Quiet, Meant for You',
+  'A Small Light, Left On',
+  'A Note From a Patient Sky',
+  'What the Evening Wanted to Say',
+];
+
+const MESSAGE_SUBTITLES = [
+  'For the soul seeking stillness in a noisy world',
+  'For a heart that has been carrying more than it says',
+  'For someone standing at the edge of a change',
+  'For the part of you that has been waiting to be asked',
+  'For a week that asked a great deal of you',
+  'For anyone who needed to hear something kind today',
+];
+
+const MESSAGE_WHISPERS = [
+  'You have been carrying quiet questions that words cannot easily hold. Some of them may not need answering yet; they may only need to be allowed to stay. You are further along than the noise suggests.',
+  'Something you have been circling may be closer to settled than it feels. You might find that the waiting was doing work you could not see from inside it.',
+  'You may have been measuring yourself against a version of this week that never existed. What actually happened was enough, and it was done by someone who was tired.',
+  'There may be more room here than you have been letting yourself use. Nothing is asking you to decide tonight, and nothing is lost by resting first.',
+  'What feels like hesitation may turn out to have been care. You could let that be the reading of it, at least until morning.',
+  'You may not need to explain yourself as carefully as you have been. The people who matter have already understood; the rest were never going to.',
+  'The thing you keep meaning to start may not need a better plan, only a smaller first step. You could make it tiny enough to be embarrassing and still count it.',
+  'You might be closer to the end of this stretch than the middle of it. It is hard to tell from inside, which is not a failure of yours.',
+  'Something you decided a while ago may quietly no longer fit. You are allowed to notice that without treating it as a verdict on who you were.',
+  'You may have been waiting for permission that was never going to arrive from outside. It might already be yours to give.',
+  'What you are calling restlessness could as easily be readiness. You do not have to decide which tonight.',
+  'There may be someone who would be glad to hear from you and is waiting for the same reason you are. One of you could go first.',
+];
+
+const MESSAGE_AFFIRMATIONS = [
+  'I give myself permission to simply be. Silence is not empty; it is full of peace.',
+  'I am allowed to move at the speed I actually have.',
+  'I can hold an open question without needing to close it today.',
+  'What I did with the day I was given was enough.',
+  'I do not have to earn my own gentleness.',
+  'I can change my mind and still be someone who keeps their word.',
+];
+
+const MESSAGE_GUIDANCE = [
+  'Sit near a window for five minutes tonight without your phone. Let the day finish on its own.',
+  'Write down the one thing you keep rehearsing, then close the notebook. It will still be there tomorrow, and smaller.',
+  'Say the smaller, truer version of the thing to one person this week.',
+  'Choose one task you have been carrying and let it be undone on purpose, rather than by accident.',
+  'Make something warm to drink and let it be the whole activity for as long as it lasts.',
+  'Step outside once after dark this week and find the moon before you go back in.',
+];
+
+const MESSAGE_ENERGIES = [
+  'Serene Moonlight',
+  'Quiet Tidewater',
+  'Low Gold Light',
+  'Still Air Before Rain',
+  'Soft Harbour Dark',
+  'Slow Turning Sky',
+];

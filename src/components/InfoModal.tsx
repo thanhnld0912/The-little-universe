@@ -18,7 +18,8 @@ export const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
       body: [
         'At The Little Universe, we believe your personal reflections, dreams, and cosmic queries belong solely to you.',
         'We do not sell, track, or commercialize your thoughts. All card pulls and intention prompts exist purely to provide comfort, gentle perspective, and mindfulness.',
-        'Your local readings are securely processed directly in your client session with maximum tranquility and respect.',
+        'Your readings are written on our server and kept there, so the one you were given stays the same each time you return rather than changing under you.',
+        'To do that we store one small anonymous identifier in a cookie. It is what makes a reading yours rather than everyone’s. It is not tied to your name or email, and it is not used for advertising or shared with anyone.',
       ],
     },
     terms: {

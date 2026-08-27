@@ -76,13 +76,25 @@ test('GET /api/predictions/daily works with no date parameter', async () => {
   assert.match((response.body.data as { date: string }).date, /^\d{4}-\d{2}-\d{2}$/);
 });
 
-test('the same date returns a byte-identical reading on every request', async () => {
+test('the same visitor gets a byte-identical reading on every request', async () => {
   const date = claimDate(2);
-  const first = await api.request('GET', `/api/predictions/daily?date=${date}`);
-  const second = await api.request('GET', `/api/predictions/daily?date=${date}`);
-  const third = await api.request('GET', `/api/predictions/daily?date=${date}`);
 
+  // The cookie is carried between calls on purpose. Readings are keyed per
+  // visitor now, so a second cookieless request is a different visitor and is
+  // meant to differ; reusing the cookie is what a real browser does.
+  const first = await api.request('GET', `/api/predictions/daily?date=${date}`);
   assert.equal(first.status, 200, first.raw);
+
+  const cookie = /tlu_visitor=[^;]+/.exec(first.headers.get('set-cookie') ?? '')?.[0];
+  assert.ok(cookie, 'a visitor cookie is issued on the first request');
+
+  const second = await api.request('GET', `/api/predictions/daily?date=${date}`, {
+    headers: { Cookie: cookie },
+  });
+  const third = await api.request('GET', `/api/predictions/daily?date=${date}`, {
+    headers: { Cookie: cookie },
+  });
+
   // What the refresh button does: re-fetch, never regenerate.
   assert.equal(second.raw, first.raw);
   assert.equal(third.raw, first.raw);
@@ -165,12 +177,23 @@ test('GET /api/predictions/weekly works with no date parameter', async () => {
   assert.equal(data.days.length, 7);
 });
 
-test('the same week returns a byte-identical forecast on every request', async () => {
+test('the same visitor gets a byte-identical forecast on every request', async () => {
   const date = claimDate(12);
-  const first = await api.request('GET', `/api/predictions/weekly?date=${date}`);
-  const second = await api.request('GET', `/api/predictions/weekly?date=${date}`);
 
+  // The cookie has to be carried between the two calls. Readings are keyed per
+  // visitor now, so a second cookieless request is a *different* visitor and is
+  // supposed to differ — asserting on two bare requests would be asserting the
+  // old site-wide behaviour.
+  const first = await api.request('GET', `/api/predictions/weekly?date=${date}`);
   assert.equal(first.status, 200, first.raw);
+
+  const cookie = /tlu_visitor=[^;]+/.exec(first.headers.get('set-cookie') ?? '')?.[0];
+  assert.ok(cookie, 'a visitor cookie is issued on the first request');
+
+  const second = await api.request('GET', `/api/predictions/weekly?date=${date}`, {
+    headers: { Cookie: cookie },
+  });
+
   assert.equal(second.raw, first.raw);
 });
 

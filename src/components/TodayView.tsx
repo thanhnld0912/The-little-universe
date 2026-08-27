@@ -1,8 +1,57 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NebulaBanner } from './CelestialArtwork';
-import { TODAY_DEFAULT_DATA } from '../data/cosmicData';
+import { fetchDailyPrediction, type DailyPrediction } from '../services/api';
+import { useAsyncData } from '../hooks/useAsyncData';
 import { Sparkles, RefreshCw, Compass } from 'lucide-react';
 import { motion } from 'motion/react';
+
+/**
+ * Shared frame for the two states that have no reading to show.
+ *
+ * Keeping the same vertical space and centring as the loaded view means the
+ * page does not jump when the reading arrives.
+ */
+const TodayStatus: React.FC<{ message: string; onRetry?: () => void }> = ({
+  message,
+  onRetry,
+}) => (
+  <div className="relative min-h-[calc(100vh-160px)] flex flex-col items-center justify-center px-4 z-10 text-center">
+    <p className="font-cormorant italic text-lg text-[#BAC7E0] tracking-wide">{message}</p>
+    {onRetry && (
+      <button
+        onClick={onRetry}
+        className="mt-5 flex items-center gap-2 px-5 py-2 rounded-full bg-[#0F1633]/80 hover:bg-[#1A234E] text-[#E5C98D] border border-[#E5C98D]/30 hover:border-[#E5C98D]/60 font-sans-ui text-xs transition-all duration-200"
+      >
+        <RefreshCw className="w-3 h-3" />
+        <span>Try again</span>
+      </button>
+    )}
+  </div>
+);
+
+/**
+ * Maps the server's reading onto the fields this view renders.
+ *
+ * Optional fields come back as `null` rather than as invented text, so an empty
+ * string here means the server genuinely had nothing for that slot and the line
+ * renders blank instead of showing someone else's content.
+ */
+function toViewModel(prediction: DailyPrediction) {
+  return {
+    energyTitle: prediction.energy,
+    energyPercentage: `${prediction.energyScore}%`,
+    theme: prediction.theme,
+    mood: prediction.mood,
+    luckyColor: prediction.luckyColor,
+    luckyColorHex: prediction.luckyColorHex ?? 'transparent',
+    luckyNumber: String(prediction.luckyNumber).padStart(2, '0'),
+    dailyWhisper: prediction.prediction,
+    cosmicQuote: prediction.cosmicQuote ?? '',
+    cosmicSign: prediction.cosmicSign ?? '',
+    element: prediction.element ?? '',
+    soundFrequency: prediction.soundFrequency ?? '',
+  };
+}
 
 interface TodayViewProps {
   onRevealMessage: () => void;
@@ -13,33 +62,24 @@ export const TodayView: React.FC<TodayViewProps> = ({
   onRevealMessage,
   onOpenShare,
 }) => {
-  const [data, setData] = useState(TODAY_DEFAULT_DATA);
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  const { data: prediction, error, isLoading, isReloading, reload } = useAsyncData(
+    fetchDailyPrediction,
+  );
 
-  // Allow gentle cosmic cycle refresh
-  const handleShuffleEnergy = () => {
-    setIsRegenerating(true);
-    setTimeout(() => {
-      const energies = [
-        { title: 'Quietly Curious', pct: '87%', theme: 'Unexpected Moments', mood: '✨ Hopeful', color: 'Dusty Rose', hex: '#DCAEAE', num: '07' },
-        { title: 'Luminous Serenity', pct: '94%', theme: 'Gentle Breakthroughs', mood: '🌊 Peaceful', color: 'Celestial Indigo', hex: '#818CF8', num: '11' },
-        { title: 'Radiant Intuition', pct: '91%', theme: 'Subtle Synchronicities', mood: '🔮 Mystical', color: 'Golden Sand', hex: '#E5C98D', num: '03' },
-        { title: 'Velvet Softness', pct: '85%', theme: 'Sacred Rest', mood: '🌙 Quiet', color: 'Sage Mist', hex: '#A7F3D0', num: '09' },
-      ];
-      const next = energies[(energies.findIndex((e) => e.title === data.energyTitle) + 1) % energies.length];
-      setData((prev) => ({
-        ...prev,
-        energyTitle: next.title,
-        energyPercentage: next.pct,
-        theme: next.theme,
-        mood: next.mood,
-        luckyColor: next.color,
-        luckyColorHex: next.hex,
-        luckyNumber: next.num,
-      }));
-      setIsRegenerating(false);
-    }, 400);
-  };
+  if (isLoading) {
+    return <TodayStatus message="Reading the sky…" />;
+  }
+
+  if (error !== undefined || prediction === undefined) {
+    return <TodayStatus message={error ?? 'Today could not be read.'} onRetry={reload} />;
+  }
+
+  const data = toViewModel(prediction);
+
+  // The refresh control re-fetches; it never asks for a new reading. Your day is
+  // generated once and then kept, so this returns what you were already given.
+  const handleShuffleEnergy = reload;
+  const isRegenerating = isReloading;
 
   return (
     <div className="relative min-h-[calc(100vh-160px)] flex flex-col items-center justify-start px-4 sm:px-6 lg:px-8 py-10 sm:py-14 z-10">
